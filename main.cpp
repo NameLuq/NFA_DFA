@@ -1,78 +1,59 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <iomanip>
 #include <algorithm>
 #include <set>
 #include <map>
 #include <stack>
 #include <memory>
+#include <iterator>
 
 using namespace std;
 
-struct Tree {
-    vector<int> vec;
-    string s;
-    unique_ptr<Tree> l;
-    unique_ptr<Tree> r;
+struct Tree 
+{
+    vector<unsigned> m_priorities;
+    string m_str;
+    unique_ptr<Tree> mp_left;
+    unique_ptr<Tree> mp_right;
 
-    Tree(string s_, vector<int> vec_) : s(s_), vec(vec_), l(nullptr), r(nullptr) {}
+    Tree(const string& str, const vector<unsigned>& priorities) : m_str(str), m_priorities(priorities), mp_left(nullptr), mp_right(nullptr) {}
 
-    void parse() {
-        if (vec.empty()) return;
+    void Parse() 
+    {
+        if (m_priorities.empty()) return;
 
-        int imin =
-            distance
-            (
-                min_element
-                (
-                    vec.rbegin(), vec.rend(),
-                    [](const auto & l, const auto & r) { return l < r; }
-                ),
-                vec.rend()
-            ) - 1;
+        unsigned imin = distance(min_element(m_priorities.rbegin(), m_priorities.rend(), [](const auto& l, const auto& r) { return l < r; }), m_priorities.rend()) - 1;
 
         string new_str;
-        int sub_ind = -1;
-        int count = -1;
-        for (int i = 0; i < s.size(); ++i)
-            if (!isalpha(s[i]) && ++count == imin) {
+        unsigned sub_ind = 0;
+        unsigned count = 0;
+        for (unsigned i = 0; i < m_str.size(); ++i)
+            if (!isalpha(m_str[i]) && count++ == imin) 
+            {
                 sub_ind = i;
-                new_str = s[i];
+                new_str = m_str[i];
                 break;
             }
 
-        vector<int> vec_l(vec.begin(), vec.begin() + imin);
-        if (!s.substr(0, sub_ind).empty()) 
+        if (!m_str.substr(0, sub_ind).empty()) 
         {
-            l.reset(new Tree(s.substr(0, sub_ind), vec_l));
-            l->parse();
+            mp_left.reset(new Tree(m_str.substr(0, sub_ind), vector<unsigned>(m_priorities.begin(), m_priorities.begin() + imin)));
+            mp_left->Parse();
+        }
+        if (!m_str.substr(sub_ind + 1, m_str.size() - sub_ind - 1).empty()) 
+        {
+            mp_right.reset(new Tree(m_str.substr(sub_ind + 1, m_str.size() - sub_ind - 1), vector<unsigned>(m_priorities.begin() + imin + 1, m_priorities.end())));
+            mp_right->Parse();
         }
 
-        vector<int> vec_r(vec.begin() + imin + 1, vec.end());
-        if (!s.substr(sub_ind + 1, s.size() - sub_ind - 1).empty()) 
-        {
-            r.reset(new Tree(s.substr(sub_ind + 1, s.size() - sub_ind - 1), vec_r));
-            r->parse();
-        }
-
-        s = new_str;
+        m_str = new_str;
     }
-
-    //void print(Tree* p)
-    //{
-    //    if (p != nullptr) {
-    //        if (p->l) print(p->l);
-    //        if (p->r) print(p->r);
-    //        cout << p->s << endl;
-    //    }
-    //}
 };
-
 
 void InsertDotsInplace(string& str) // worst way to write if (str[i-1] != '|')
 {
-    int i = 0;
+    unsigned i = 0;
     while (i < str.size() - 1) {
         if (((str[i] != '|' && str[i] != '(' && str[i] != ')') &&
             (isalpha(str[i + 1]) || str[i + 1] == '(')) ||
@@ -85,24 +66,25 @@ void InsertDotsInplace(string& str) // worst way to write if (str[i-1] != '|')
     }
 }
 
-constexpr char EPS = '~';
-const vector<unsigned> NOP = { ~0U };
+constexpr char     EPS =     '~';
+constexpr unsigned X   =     ~0U;
+#define            NOP      { X }
 
-struct NSA
+struct NFA
 {
     map<char, vector<vector<unsigned>>> state_table;
     unsigned start, end, size;
 };
 
-void PrintNSA(const NSA& nsa)
+void PrintNFA(const NFA& nfa)
 {
-    cout << "Start state is " << nsa.start << endl;
-    cout << "End state is " << nsa.end << endl;
+    cout << "Start state is " << nfa.start << endl;
+    cout << "End state is " << nfa.end << endl;
 
-    for (const auto& it_row : nsa.state_table)
+    for (const auto& it_row : nfa.state_table)
     {
-        auto& input = it_row.first;
-        auto& row = it_row.second;
+        const auto& input = it_row.first;
+        const auto& row = it_row.second;
 
         cout << input << ": ";
         for (unsigned i = 0; i < row.size(); ++i)
@@ -110,77 +92,66 @@ void PrintNSA(const NSA& nsa)
             cout << i << " -> { ";
             for (const auto& el : row[i])
             {
-                if (el == ~0U)
-                    cout << "NO ";
+                if (el == X)
+                    cout << "X ";
                 else
                     cout << el << " ";
             }
             cout << "}, ";
         }
-
         cout << '\n';
     }
 }
 
-NSA MakeSimpleNSA(char c)
+NFA MakeSimpleNFA(char c)
 {
-    NSA simple_NSA{};
-    simple_NSA.start = 0;
-    simple_NSA.end = 1;
-    simple_NSA.size = 2;
+    NFA simple_NFA{};
+    simple_NFA.start = 0;
+    simple_NFA.end = 1;
+    simple_NFA.size = 2;
 
-    vector<vector<unsigned>> simple_transition_row = { { 1 }, NOP }; // from 0 to 1, from 1 to 1 (SAME means S -> S)
-    simple_NSA.state_table[c] = simple_transition_row;
-    //simple_NSA.state_table.emplace(EPS, simple_NSA.size, SAME);
-    simple_NSA.state_table[EPS] = vector<vector<unsigned>>(simple_NSA.size, NOP);
+    vector<vector<unsigned>> simple_transition_row = { { X, 1 }, NOP };
+    simple_NFA.state_table[c] = simple_transition_row;
+    simple_NFA.state_table[EPS].assign(simple_NFA.size, NOP);
 
-    return simple_NSA;
+    return simple_NFA;
 }
 
-void AppendInplace(NSA& dest, const NSA& src)
+void AppendInplace(NFA& dest, const NFA& src)
 {
-    unsigned old_size = dest.size;
-    unsigned new_size = old_size + src.size;
+    auto old_size = dest.size;
+    auto new_size = old_size + src.size;
 
     set<char> alphabet;
-    for (const auto& it_row : dest.state_table)
-    {
-        alphabet.insert(it_row.first);
-    }
-    for (const auto& it_row : src.state_table)
-    {
-        alphabet.insert(it_row.first);
-    }
+    auto get_char = [](const auto& it_row) { return it_row.first; };
+    transform(dest.state_table.begin(), dest.state_table.end(), inserter(alphabet, alphabet.end()), get_char);
+    transform(src.state_table.begin(), src.state_table.end(), inserter(alphabet, alphabet.end()), get_char);
 
-    for (const auto& input : alphabet)
+    for (const auto& c : alphabet)
     {
-        auto& dest_row = dest.state_table[input]; // Automatically creates one if it doesn't exist
+        auto& dest_row = dest.state_table[c];
         dest_row.resize(new_size, NOP);
 
-        if (src.state_table.count(input))
+        const auto& it_trans_from_c = src.state_table.find(c);
+        if (it_trans_from_c != src.state_table.end())
         {
-            const auto& src_row = src.state_table.at(input);
-            //vector<vector<unsigned>> updated_src_row = src_row;
+            const auto& src_row = it_trans_from_c->second;
             copy(src_row.begin(), src_row.end(), dest_row.begin() + old_size);
-            transform(dest_row.begin() + old_size, dest_row.end(), dest_row.begin() + old_size, [=](const auto & vec)
+            for_each(dest_row.begin() + old_size, dest_row.end(), [=](auto& vec)
             {
-                vector<unsigned> new_vec;
-                for (auto& el : vec) new_vec.push_back(el != ~0 ? el + old_size : el);
-                return new_vec;
+                for (auto& el : vec) el += el != X ? old_size : 0;
             });
         }
 
-        if (input == EPS)
-        {
+        if (c == EPS)
             dest_row[dest.end].push_back(old_size + src.start);
-        }
     }
 
     dest.end = old_size + src.end;
     dest.size = new_size;
 }
 
-void OrInplace(NSA& dest, const NSA& src)
+void OrInplace(NFA& dest, const NFA& src) // 60% copypast of Append
 {
     unsigned old_size = dest.size;
     unsigned new_size = old_size + src.size + 2;
@@ -197,30 +168,25 @@ void OrInplace(NSA& dest, const NSA& src)
 
     for (const auto& input : alphabet)
     {
-        auto& dest_row = dest.state_table[input]; // Automatically creates one if it doesn't exist
+        auto& dest_row = dest.state_table[input];
         dest_row.resize(new_size, NOP);
 
         if (src.state_table.count(input))
         {
             const auto& src_row = src.state_table.at(input);
             vector<vector<unsigned>> updated_src_row = src_row;
-            transform(updated_src_row.begin(), updated_src_row.end(), updated_src_row.begin(), [=](const auto & vec)
+            transform(updated_src_row.begin(), updated_src_row.end(), updated_src_row.begin(), [=](auto& vec)
             {
-                vector<unsigned> new_vec;
-                for (auto& el : vec) new_vec.push_back(el != ~0 ? el + old_size : el);
-                return new_vec;
+                for (auto& el : vec) el != X ? el += old_size : el; return vec;
             });
             copy(updated_src_row.begin(), updated_src_row.end(), dest_row.begin() + old_size);
         }
 
         rotate(dest_row.rbegin(), dest_row.rbegin() + 1, dest_row.rend()); // Rotate right
-        transform(dest_row.begin(), dest_row.end(), dest_row.begin(), [=](auto & vec)
+        transform(dest_row.begin(), dest_row.end(), dest_row.begin(), [=](auto& vec)
         {
-            vector<unsigned> new_vec;
-            for (auto& el : vec) new_vec.push_back(el != ~0 ? el + 1 : el);
-            return new_vec;
+            for (auto& el : vec) el != X ? el += 1 : el; return vec;
         });
-        //dest_row.front() = SAME;
 
         if (input == EPS)
         {
@@ -236,30 +202,45 @@ void OrInplace(NSA& dest, const NSA& src)
     dest.size = new_size;
 }
 
-void StarInplace(NSA& dest)
+void StarInplace(NFA& dest)
 {
-    auto& eps_transitions = dest.state_table[EPS];
-    eps_transitions[dest.start].push_back(dest.end);
-    eps_transitions[dest.end].push_back(dest.start);
+    for (auto& it_row : dest.state_table)
+    {
+        auto& row = it_row.second;
+
+        row.insert(row.begin(), NOP);
+        row.insert(row.end(), NOP);
+        for_each(row.begin(), row.end(), [=](auto& vec)
+        {
+            for (auto& el : vec) el += el != X ? 1 : 0;
+        });
+
+        if (it_row.first == EPS)
+        {
+            row[dest.end + 1].push_back(dest.start + 1); // F -e-> S
+            row[dest.end + 1].push_back(row.size() - 1); // F -e-> NF
+            row[0].push_back(dest.start + 1); // NS -e-> S
+            row[dest.start = 0].push_back(dest.end = row.size() - 1); // NS -e-> NF
+        }
+    }
+
+    dest.size += 2;
 }
 
-void PlusInplace(NSA& dest)
+void PlusInplace(NFA& dest)
 {
     dest.state_table[EPS][dest.end].push_back(dest.start);
 }
 
-NSA BuildFromParseTree(const Tree* t)
+NFA BuildFromParseTree(const Tree* t)
 {
-    char token = t->s[0];
+    auto token = t->m_str[0];
     if (isalpha(token))
-    {
-        NSA simple = MakeSimpleNSA(token);
-        return simple;
-    }
+        return MakeSimpleNFA(token);
 
-    NSA left, right;
-    if (t->l) left = BuildFromParseTree(t->l.get());
-    if (t->r) right = BuildFromParseTree(t->r.get());
+    NFA left, right;
+    if (t->mp_left) left = BuildFromParseTree(t->mp_left.get());
+    if (t->mp_right) right = BuildFromParseTree(t->mp_right.get());
 
     switch (token)
     {
@@ -269,102 +250,33 @@ NSA BuildFromParseTree(const Tree* t)
     case '+': PlusInplace(left); break;
     }
 
-    //cout << token << endl;
-    //PrintNSA(left);
-
     return left;
 }
 
-set<unsigned> eps_closure(const NSA& N, const vector<unsigned>& states) 
+set<unsigned> EpsClosure(const NFA& N, const vector<unsigned>& states) 
 { 
-    set<unsigned> eps_clos(states.begin(), states.end());
+    set<unsigned> eps_closure(states.begin(), states.end());
     stack<unsigned, vector<unsigned>> S(states);
-    unsigned num;
     
-    //for (const auto& a : states)
-    //{
-    //    if (a != ~0U)
-    //    {
-    //        S.push(a);
-    //        eps_clos.insert(a);
-    //    }
-    //}
-
     while (!S.empty()) 
     {
-        num = S.top();
-        S.pop();
+        auto state = S.top(); S.pop();
 
-        for (const auto& a : N.state_table.at(EPS)[num])
-        {
-            if (a != ~0U && !eps_clos.count(a))
-            {
-                eps_clos.insert(a);
-                S.push(a);
-            }
-        }
+        for (const auto& dest : N.state_table.at(EPS)[state])
+            if (dest != X && eps_closure.insert(dest).second)
+                S.push(dest);
     }
 
-    return eps_clos;
+    return eps_closure;
 }
 
 struct DFA {
-    vector<unsigned> ends;
-    //map<pair<vector<unsigned>, vector<unsigned>>, char> trans_table; //form,to,with
+    unsigned start_state;
+    vector<unsigned> end_states;
     map<char, map<unsigned, unsigned>> transition_table;
-    unsigned start;
-    set<char> alphabet;
 };
 
-//DFA make_dfa(const NSA& N) {
-//    DFA out;
-//    map<vector<unsigned>, unsigned> my_map;
-//    vector<unsigned> starts = eps_closure(N, { N.start });
-//
-//    vector<vector<unsigned>> marked({ starts });
-//    my_map[starts] = my_map.size();
-//    out.start = 0;
-//
-//    while (!marked.empty()) {
-//        vector<unsigned> T = marked.back();
-//        marked.pop_back();
-//        if (find(T.begin(), T.end(), N.end) != T.end()) {
-//            out.ends.push_back(my_map.size());
-//        }
-//
-//        set<char> alphabet;
-//        for (auto& a : N.state_table)
-//            alphabet.insert(a.first);
-//
-//        for (auto& a : alphabet) {
-//            set<unsigned> newT;
-//            for (auto& t : T) {
-//                for (auto& tt : N.state_table.at(a).at(t)) {
-//                    newT.insert(tt);
-//                }
-//            }
-//
-//            vector<unsigned>unique_move_T;
-//            for (auto& t : newT) {
-//                if (t != ~0U)
-//                    unique_move_T.push_back(t);
-//            }
-//
-//            vector<unsigned> U = eps_closure(N, unique_move_T);
-//
-//            if (my_map.find(U) == my_map.end()) {
-//                my_map[U] = my_map.size();
-//                marked.push_back(U);
-//            }
-//
-//            out.trans_table[{T, U}] = a;
-//        }
-//
-//    }
-//    return out;
-//}
-
-DFA MakeDFA(const NSA& N)
+DFA MakeDFA(const NFA& N)
 {
     DFA dfa{};
 
@@ -373,52 +285,46 @@ DFA MakeDFA(const NSA& N)
         if (p.first != EPS)
             alphabet.insert(p.first);
 
-    dfa.alphabet = alphabet;
-
     map<set<unsigned>, unsigned> state_translation_from_set;
     map<unsigned, set<unsigned>> state_translation_from_label;
     unsigned label;
 
-    std::vector<unsigned> unmarked_states;
+    stack<unsigned> unmarked_states;
 
-    set<unsigned> start_states = eps_closure(N, { N.start });
+    set<unsigned> start_states = EpsClosure(N, { N.start });
     label = state_translation_from_set[start_states] = state_translation_from_set.size();
     state_translation_from_label[label] = start_states;
-    unmarked_states.push_back(label);
+    unmarked_states.push(label);
 
     while (!unmarked_states.empty())
     {
-        unsigned state = unmarked_states.back(); unmarked_states.pop_back();
+        auto state = unmarked_states.top(); unmarked_states.pop();
 
         const auto& state_set = state_translation_from_label[state];
         if (find_if(state_set.begin(), state_set.end(), [&](const auto& p){ return N.end == p; }) != state_set.end())
-        {
-            dfa.ends.push_back(state);
-        }
+            dfa.end_states.push_back(state);
 
-        for (char c : alphabet)
+        for (const auto& c : alphabet)
         {
             vector<unsigned> moves;
+            const auto& transitions_by_c = N.state_table.at(c);
             for (const auto& state : state_set)
             {
-                const auto& transitions = N.state_table.at(c)[state];
-                for (const auto& t : transitions)
-                    if (t != ~0U)
-                        moves.push_back(t);
-
-                //moves.insert(moves.end(), transitions.begin(), transitions.end());
+                const auto& destinations = transitions_by_c[state];
+                copy_if(destinations.begin(), destinations.end(), back_inserter(moves), [](const auto& el) { return el != X; });
             }
             
-            const auto U = eps_closure(N, moves);
+            const auto U = EpsClosure(N, moves);
 
-            if (!state_translation_from_set.count(U))
+            const auto& it_translation_from_U = state_translation_from_set.find(U);
+            if (it_translation_from_U == state_translation_from_set.end())
             {
-                label = state_translation_from_set[U] = state_translation_from_set.size();
+                dfa.transition_table[c][state] = label = state_translation_from_set[U] = state_translation_from_set.size();
                 state_translation_from_label[label] = U;
-                unmarked_states.push_back(label);
+                unmarked_states.push(label);
             }
-
-            dfa.transition_table[c][state] = state_translation_from_set[U];
+            else
+                dfa.transition_table[c][state] = it_translation_from_U->second;
         }
     }
 
@@ -427,112 +333,98 @@ DFA MakeDFA(const NSA& N)
 
 void printDFA(const DFA& D)
 {
-    cout << "Start state is " << D.start << endl;
+    cout << "Start state is " << D.start_state << endl;
 
     cout << "End states are: ";
-    for (auto& a : D.ends) {
+    for (const auto& a : D.end_states) 
         cout << a << ' ';
-    }
     cout << endl;
 
     for (const auto& it_row : D.transition_table)
     {
-        auto& input = it_row.first;
-        auto& row = it_row.second;
+        const auto& input = it_row.first;
+        const auto& row = it_row.second;
 
         cout << input << ": ";
         for (const auto& it_column : row)
-        {
             cout << it_column.first << " -> " << it_column.second << ", ";
-        }
         cout << endl;
     }
 }
 
 bool MatchInput(const DFA& dfa, const string& input)
 {
-    auto current_state = dfa.start;
+    bool is_matching = false;
+    auto current_state = dfa.start_state;
 
     for (const auto& c : input)
     {
-        if (dfa.alphabet.count(c))
-            current_state = dfa.transition_table.at(c).at(current_state);
+        const auto& it_trans_from_c = dfa.transition_table.find(c);
+        if (it_trans_from_c != dfa.transition_table.end())
+            current_state = it_trans_from_c->second.at(current_state);
         else
             return false;
     }
-    if (find(dfa.ends.begin(), dfa.ends.end(), current_state) != dfa.ends.end())
-        return true;
-    else
-        return false;
+
+    if (find(dfa.end_states.begin(), dfa.end_states.end(), current_state) != dfa.end_states.end())
+        is_matching = true;
+
+    return is_matching;
 }
 
-NSA MakeNSA(const string& input)
+NFA MakeNFA(string regexpr)
 {
-    string str = input;
-    vector<int> vec;
-    int prior = 0;
-    int i = 0;
+    vector<unsigned> priorities;
+    unsigned p = 0;
 
-    InsertDotsInplace(str);
+    InsertDotsInplace(regexpr);
 
-    for (int i = 0; i < str.size(); ++i) 
-    {
-        switch (str[i]) 
+    for (unsigned i = 0; i < regexpr.size(); ++i)
+        switch (regexpr[i])
         {
-        case '(': {++prior; break; }
-        case ')': {--prior; break; }
-        case '+': {vec.push_back(3 + prior * 3); break; } //high
-        case '*': {vec.push_back(3 + prior * 3); break; } //high
-        case '|': {vec.push_back(2 + prior * 3); break; } //medium
-        case '.': {vec.push_back(1 + prior * 3); break; } //low
-        default: break;
+        case '(': ++p; break;
+        case ')': --p; break;
+
+        case '+':                                         //high
+        case '*': priorities.push_back(3 + p * 3); break; //high
+        case '|': priorities.push_back(2 + p * 3); break; //medium
+        case '.': priorities.push_back(1 + p * 3); break; //low
         }
-        //if (prior < 0) {
-        //    cout << "Invalid in da house" << endl;
-        //    return -1;
-        //}
-    }
 
-    str.erase(remove_if(str.begin(), str.end(), [](const auto & c) {return c == '(' || c == ')'; }), str.end());
+    regexpr.erase(remove_if(regexpr.begin(), regexpr.end(), [](const auto& c) {return c == '(' || c == ')'; }), regexpr.end()); //rm -rf brackets
 
-    Tree tree(str, vec);
-    tree.parse();
-    return BuildFromParseTree(&tree);
+    Tree root(regexpr, priorities); root.Parse();
+    return BuildFromParseTree(&root);
 }
 
-void Repl()
+int Repl() // GOTO YAY
 {
 read_regexpr:
     string str;
-    string ws;
     cout << "Give me your regexpr\n";
     getline(cin, str);
-    if (str.length() == 0) goto read_regexpr;
+    if (str.length() == 0) goto read_regexpr; //handle incorrect input here
 
-    NSA my_nsa = MakeNSA(str);
-    //PrintNSA(my_nsa);
-    DFA my_dfa = MakeDFA(my_nsa);
+    DFA my_dfa = MakeDFA(MakeNFA(str));
     printDFA(my_dfa);
 
 match_input:
     cout << "Give me your string\n";
-    getline(cin, str);
+    getline(cin, str); 
 
     if (str == "~") goto read_regexpr;
     else
     {
-        if (MatchInput(my_dfa, str))
-            cout << "Yes\n";
-        else
-            cout << "No\n";
+        if (MatchInput(my_dfa, str)) cout << "Yes\n";
+        else cout << "No\n";
 
         goto match_input;
     }
+
+    return 0;
 }
 
 int main() 
 {
-    Repl();
-
-    return 0;
+    return Repl();
 }
